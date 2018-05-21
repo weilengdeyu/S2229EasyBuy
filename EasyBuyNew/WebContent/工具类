@@ -1,0 +1,227 @@
+01.package com.db.gen.entity.tool;  
+02.  
+03.  
+04.import java.io.File;  
+05.import java.io.FileWriter;  
+06.import java.io.IOException;  
+07.import java.io.PrintWriter;  
+08.import java.sql.Connection;  
+09.import java.sql.DriverManager;  
+10.import java.sql.PreparedStatement;  
+11.import java.sql.ResultSetMetaData;  
+12.import java.sql.SQLException;  
+13.import java.util.Date;  
+14.  
+15.public class GenEntityMysql {  
+16.      
+17.    private String packageOutPath = "com.user.entity";//指定实体生成所在包的路径  
+18.    private String authorName = "封狼居胥";//作者名字  
+19.    private String tablename = "user";//表名  
+20.    private String[] colnames; // 列名数组  
+21.    private String[] colTypes; //列名类型数组  
+22.    private int[] colSizes; //列名大小数组  
+23.    private boolean f_util = false; // 是否需要导入包java.util.*  
+24.    private boolean f_sql = false; // 是否需要导入包java.sql.*  
+25.      
+26.    //数据库连接  
+27.    private static final String URL ="jdbc:mysql://localhost:3306/jbpm";  
+28.    private static final String NAME = "root";  
+29.    private static final String PASS = "root";  
+30.    private static final String DRIVER ="com.mysql.jdbc.Driver";  
+31.  
+32.    /* 
+33.     * 构造函数 
+34.     */  
+35.    public GenEntityMysql(){  
+36.        //创建连接  
+37.        Connection con;  
+38.        //查要生成实体类的表  
+39.        String sql = "select * from " + tablename;  
+40.        PreparedStatement pStemt = null;  
+41.        try {  
+42.            try {  
+43.                Class.forName(DRIVER);  
+44.            } catch (ClassNotFoundException e1) {  
+45.                // TODO Auto-generated catch block  
+46.                e1.printStackTrace();  
+47.            }  
+48.            con = DriverManager.getConnection(URL,NAME,PASS);  
+49.            pStemt = con.prepareStatement(sql);  
+50.            ResultSetMetaData rsmd = pStemt.getMetaData();  
+51.            int size = rsmd.getColumnCount();   //统计列  
+52.            colnames = new String[size];  
+53.            colTypes = new String[size];  
+54.            colSizes = new int[size];  
+55.            for (int i = 0; i < size; i++) {  
+56.                colnames[i] = rsmd.getColumnName(i + 1);  
+57.                colTypes[i] = rsmd.getColumnTypeName(i + 1);  
+58.                  
+59.                if(colTypes[i].equalsIgnoreCase("datetime")){  
+60.                    f_util = true;  
+61.                }  
+62.                if(colTypes[i].equalsIgnoreCase("image") || colTypes[i].equalsIgnoreCase("text")){  
+63.                    f_sql = true;  
+64.                }  
+65.                colSizes[i] = rsmd.getColumnDisplaySize(i + 1);  
+66.            }  
+67.              
+68.            String content = parse(colnames,colTypes,colSizes);  
+69.              
+70.            try {  
+71.                File directory = new File("");  
+72.                //System.out.println("绝对路径："+directory.getAbsolutePath());  
+73.                //System.out.println("相对路径："+directory.getCanonicalPath());  
+74.                String path=this.getClass().getResource("").getPath();  
+75.                  
+76.                System.out.println(path);  
+77.                System.out.println("src/?/"+path.substring(path.lastIndexOf("/com/", path.length())) );  
+78.//              String outputPath = directory.getAbsolutePath()+ "/src/"+path.substring(path.lastIndexOf("/com/", path.length()), path.length()) + initcap(tablename) + ".java";  
+79.                String outputPath = directory.getAbsolutePath()+ "/src/"+this.packageOutPath.replace(".", "/")+"/"+initcap(tablename) + ".java";  
+80.                FileWriter fw = new FileWriter(outputPath);  
+81.                PrintWriter pw = new PrintWriter(fw);  
+82.                pw.println(content);  
+83.                pw.flush();  
+84.                pw.close();  
+85.            } catch (IOException e) {  
+86.                e.printStackTrace();  
+87.            }  
+88.              
+89.        } catch (SQLException e) {  
+90.            e.printStackTrace();  
+91.        } finally{  
+92.//          try {  
+93.//              con.close();  
+94.//          } catch (SQLException e) {  
+95.//              // TODO Auto-generated catch block  
+96.//              e.printStackTrace();  
+97.//          }  
+98.        }  
+99.    }  
+100.  
+101.    /** 
+102.     * 功能：生成实体类主体代码 
+103.     * @param colnames 
+104.     * @param colTypes 
+105.     * @param colSizes 
+106.     * @return 
+107.     */  
+108.    private String parse(String[] colnames, String[] colTypes, int[] colSizes) {  
+109.        StringBuffer sb = new StringBuffer();  
+110.          
+111.        //判断是否导入工具包  
+112.        if(f_util){  
+113.            sb.append("import java.util.Date;\r\n");  
+114.        }  
+115.        if(f_sql){  
+116.            sb.append("import java.sql.*;\r\n");  
+117.        }  
+118.        sb.append("package " + this.packageOutPath + ";\r\n");  
+119.        sb.append("\r\n");  
+120.        //注释部分  
+121.        sb.append("   /**\r\n");  
+122.        sb.append("    * "+tablename+" 实体类\r\n");  
+123.        sb.append("    * "+new Date()+" "+this.authorName+"\r\n");  
+124.        sb.append("    */ \r\n");  
+125.        //实体部分  
+126.        sb.append("\r\n\r\npublic class " + initcap(tablename) + "{\r\n");  
+127.        processAllAttrs(sb);//属性  
+128.        processAllMethod(sb);//get set方法  
+129.        sb.append("}\r\n");  
+130.          
+131.        //System.out.println(sb.toString());  
+132.        return sb.toString();  
+133.    }  
+134.      
+135.    /** 
+136.     * 功能：生成所有属性 
+137.     * @param sb 
+138.     */  
+139.    private void processAllAttrs(StringBuffer sb) {  
+140.          
+141.        for (int i = 0; i < colnames.length; i++) {  
+142.            sb.append("\tprivate " + sqlType2JavaType(colTypes[i]) + " " + colnames[i] + ";\r\n");  
+143.        }  
+144.          
+145.    }  
+146.  
+147.    /** 
+148.     * 功能：生成所有方法 
+149.     * @param sb 
+150.     */  
+151.    private void processAllMethod(StringBuffer sb) {  
+152.          
+153.        for (int i = 0; i < colnames.length; i++) {  
+154.            sb.append("\tpublic void set" + initcap(colnames[i]) + "(" + sqlType2JavaType(colTypes[i]) + " " +   
+155.                    colnames[i] + "){\r\n");  
+156.            sb.append("\tthis." + colnames[i] + "=" + colnames[i] + ";\r\n");  
+157.            sb.append("\t}\r\n");  
+158.            sb.append("\tpublic " + sqlType2JavaType(colTypes[i]) + " get" + initcap(colnames[i]) + "(){\r\n");  
+159.            sb.append("\t\treturn " + colnames[i] + ";\r\n");  
+160.            sb.append("\t}\r\n");  
+161.        }  
+162.          
+163.    }  
+164.      
+165.    /** 
+166.     * 功能：将输入字符串的首字母改成大写 
+167.     * @param str 
+168.     * @return 
+169.     */  
+170.    private String initcap(String str) {  
+171.          
+172.        char[] ch = str.toCharArray();  
+173.        if(ch[0] >= 'a' && ch[0] <= 'z'){  
+174.            ch[0] = (char)(ch[0] - 32);  
+175.        }  
+176.          
+177.        return new String(ch);  
+178.    }  
+179.  
+180.    /** 
+181.     * 功能：获得列的数据类型 
+182.     * @param sqlType 
+183.     * @return 
+184.     */  
+185.    private String sqlType2JavaType(String sqlType) {  
+186.          
+187.        if(sqlType.equalsIgnoreCase("bit")){  
+188.            return "boolean";  
+189.        }else if(sqlType.equalsIgnoreCase("tinyint")){  
+190.            return "byte";  
+191.        }else if(sqlType.equalsIgnoreCase("smallint")){  
+192.            return "short";  
+193.        }else if(sqlType.equalsIgnoreCase("int")){  
+194.            return "int";  
+195.        }else if(sqlType.equalsIgnoreCase("bigint")){  
+196.            return "long";  
+197.        }else if(sqlType.equalsIgnoreCase("float")){  
+198.            return "float";  
+199.        }else if(sqlType.equalsIgnoreCase("decimal") || sqlType.equalsIgnoreCase("numeric")   
+200.                || sqlType.equalsIgnoreCase("real") || sqlType.equalsIgnoreCase("money")   
+201.                || sqlType.equalsIgnoreCase("smallmoney")){  
+202.            return "double";  
+203.        }else if(sqlType.equalsIgnoreCase("varchar") || sqlType.equalsIgnoreCase("char")   
+204.                || sqlType.equalsIgnoreCase("nvarchar") || sqlType.equalsIgnoreCase("nchar")   
+205.                || sqlType.equalsIgnoreCase("text")){  
+206.            return "String";  
+207.        }else if(sqlType.equalsIgnoreCase("datetime")){  
+208.            return "Date";  
+209.        }else if(sqlType.equalsIgnoreCase("image")){  
+210.            return "Blod";  
+211.        }  
+212.          
+213.        return null;  
+214.    }  
+215.      
+216.    /** 
+217.     * 出口 
+218.     * TODO 
+219.     * @param args 
+220.     */  
+221.    public static void main(String[] args) {  
+222.          
+223.        new GenEntityMysql();  
+224.          
+225.    }  
+226.  
+227.}
